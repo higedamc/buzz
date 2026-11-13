@@ -432,6 +432,11 @@ fn required_scope_for_kind(kind: u32, event: &Event) -> Result<Scope, &'static s
         KIND_DM_OPEN | KIND_DM_ADD_MEMBER | KIND_DM_HIDE => Ok(Scope::MessagesWrite),
         KIND_WORKFLOW_DEF | KIND_WORKFLOW_TRIGGER => Ok(Scope::MessagesWrite),
         KIND_APPROVAL_GRANT | KIND_APPROVAL_DENY => Ok(Scope::MessagesWrite),
+        // NIP-82 software distribution (app / release / asset): publisher-owned
+        // global state, same ownership shape as kind:0 and the NIP-51 lists.
+        buzz_core::kind::KIND_SOFTWARE_APP
+        | buzz_core::kind::KIND_SOFTWARE_RELEASE
+        | buzz_core::kind::KIND_SOFTWARE_ASSET => Ok(Scope::UsersWrite),
         _ => Err("restricted: unknown event kind"),
     }
 }
@@ -585,6 +590,11 @@ pub(crate) fn is_global_only_kind(kind: u32) -> bool {
             // NIP-AM: agent turn metrics are owner-scoped global events.
             // Channel identity is encrypted inside the payload — no `h` tag.
             | KIND_AGENT_TURN_METRIC
+            // NIP-82 software app / release / asset: publisher-owned, never
+            // channel-scoped (a stray `h` tag must not scope them).
+            | buzz_core::kind::KIND_SOFTWARE_APP
+            | buzz_core::kind::KIND_SOFTWARE_RELEASE
+            | buzz_core::kind::KIND_SOFTWARE_ASSET
             // NIP-PL leases are author-owned, addressable global state.
             | super::push_lease::KIND_PUSH_LEASE
     )

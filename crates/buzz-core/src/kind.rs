@@ -64,6 +64,15 @@ pub const KIND_FILE_METADATA: u32 = 1063;
 /// Parameterized replaceable (NIP-33, 30000–39999 range) — keyed by `(pubkey, kind, d_tag)`.
 /// Stored globally (channel_id = NULL); author-owned, not channel-scoped.
 pub const KIND_LONG_FORM: u32 = 30023;
+/// NIP-82: software application metadata (parameterized replaceable).
+/// Stored globally (channel_id = NULL); publisher-owned, not channel-scoped.
+pub const KIND_SOFTWARE_APP: u32 = 32267;
+/// NIP-82: software release (parameterized replaceable, `d` = <app id>@<version>).
+/// Stored globally (channel_id = NULL); publisher-owned, not channel-scoped.
+pub const KIND_SOFTWARE_RELEASE: u32 = 30063;
+/// NIP-82: software asset (regular; NIP-82's extension of NIP-94 kind 1063).
+/// Stored globally (channel_id = NULL); publisher-owned, not channel-scoped.
+pub const KIND_SOFTWARE_ASSET: u32 = 3063;
 /// NIP-38: User status (general, music, or custom d-tag).
 /// Parameterized replaceable (NIP-33, 30000–39999 range) — keyed by `(pubkey, kind, d_tag)`.
 /// Stored globally (channel_id = NULL); user-owned personal data, not channel-scoped.
