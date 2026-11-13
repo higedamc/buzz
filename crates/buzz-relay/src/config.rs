@@ -12,6 +12,9 @@ use tracing::warn;
 /// Must comfortably exceed accepted event content sizes after Nostr JSON and
 /// NIP-44 encryption overhead.
 pub const DEFAULT_MAX_FRAME_BYTES: usize = 512 * 1024;
+/// Default NIP-42 auth deadline for a fresh WebSocket connection, in seconds
+/// (`BUZZ_WS_AUTH_TIMEOUT_SECS`).
+pub const DEFAULT_WS_AUTH_TIMEOUT_SECS: u64 = 5;
 
 /// Errors that can occur while loading relay configuration.
 #[derive(Debug, Error)]
@@ -105,6 +108,12 @@ pub struct Config {
     pub pairing_relay_url: Option<String>,
     /// Maximum number of concurrent WebSocket connections.
     pub max_connections: usize,
+    /// How long an unauthenticated WebSocket connection may sit before the
+    /// relay closes it (`BUZZ_WS_AUTH_TIMEOUT_SECS`, default 5). Only the wait
+    /// changes: NIP-42 AUTH stays mandatory for every connection. Clients that
+    /// gate the AUTH signature on a user prompt or an external signer, or that
+    /// reach the relay over Tor, need longer than the default.
+    pub ws_auth_timeout: Duration,
     /// Maximum number of concurrently executing message handlers.
     pub max_concurrent_handlers: usize,
     /// Per-connection outbound message buffer size (number of messages).
@@ -558,6 +567,14 @@ impl Config {
             .and_then(|v| v.parse().ok())
             .unwrap_or(10_000);
 
+        let ws_auth_timeout = Duration::from_secs(
+            std::env::var("BUZZ_WS_AUTH_TIMEOUT_SECS")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+                .filter(|&v| v > 0)
+                .unwrap_or(DEFAULT_WS_AUTH_TIMEOUT_SECS),
+        );
+
         let max_concurrent_handlers = std::env::var("BUZZ_MAX_CONCURRENT_HANDLERS")
             .ok()
             .and_then(|v| v.parse().ok())
@@ -999,6 +1016,7 @@ impl Config {
             relay_url,
             pairing_relay_url,
             max_connections,
+            ws_auth_timeout,
             max_concurrent_handlers,
             send_buffer_size,
             max_frame_bytes,
@@ -1237,6 +1255,41 @@ mod tests {
         assert_eq!(overridden, 32);
         assert_eq!(zero, 16, "zero must fall back to the default");
         assert_eq!(junk, 16, "unparsable value must fall back to the default");
+    }
+
+    #[test]
+    fn ws_auth_timeout_env_override_and_invalid_fallback() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let previous = std::env::var_os("BUZZ_WS_AUTH_TIMEOUT_SECS");
+
+        std::env::set_var("BUZZ_WS_AUTH_TIMEOUT_SECS", "90");
+        let overridden = Config::from_env().expect("config").ws_auth_timeout;
+
+        std::env::set_var("BUZZ_WS_AUTH_TIMEOUT_SECS", "0");
+        let zero = Config::from_env().expect("config").ws_auth_timeout;
+
+        std::env::set_var("BUZZ_WS_AUTH_TIMEOUT_SECS", "not-a-number");
+        let junk = Config::from_env().expect("config").ws_auth_timeout;
+
+        std::env::remove_var("BUZZ_WS_AUTH_TIMEOUT_SECS");
+        let unset = Config::from_env().expect("config").ws_auth_timeout;
+
+        if let Some(value) = previous {
+            std::env::set_var("BUZZ_WS_AUTH_TIMEOUT_SECS", value);
+        }
+
+        assert_eq!(overridden, Duration::from_secs(90));
+        assert_eq!(
+            zero,
+            Duration::from_secs(DEFAULT_WS_AUTH_TIMEOUT_SECS),
+            "zero must fall back to the default"
+        );
+        assert_eq!(
+            junk,
+            Duration::from_secs(DEFAULT_WS_AUTH_TIMEOUT_SECS),
+            "unparsable value must fall back to the default"
+        );
+        assert_eq!(unset, Duration::from_secs(5), "default deadline stays 5 s");
     }
 
     #[test]
